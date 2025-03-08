@@ -30,8 +30,6 @@ walks down the given directory, and remove the provided string from the names. I
 
 Run the omitter with the following options:
 
-**Build the binary:**
-
 ```bash
 ./omitter -p /path/to/directory -s "substring" [options]
 ```
