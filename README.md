@@ -7,6 +7,7 @@ walks down the given directory, and remove the provided string from the names. I
 
 - **Dry-Run Mode (`-d`)**: Preview changes without modifying any files.
 - **Interactive Mode (`-i`)**: Get a confirmation prompt before applying changes.
+- **Regex Mode (`-i`)**: Accept regex(regular expression) on -s flag.
 - **Verbose Output (`-v`)**: See detailed logs of the operations.
 - **Flexible String Matching**: Remove a given substring from file names.
 - **Easy Integration**: Can be used in scripts or manually via command-line.
@@ -31,17 +32,23 @@ walks down the given directory, and remove the provided string from the names. I
 Run the omitter with the following options:
 
 ```bash
-./omitter -p /path/to/directory -s "substring" [options]
+./omitter -p /path/to/directory -s "" [options]
+```
+
+Sample regex command:
+
+```bash
+./omitter -p /path/to/directory -s "\\d+" -r [options]
 ```
 
 ### Options
 
 - **`-p`**: Path to the directory containing files.
-- **`-s`**: The substring to find (and remove).
+- **`-s`**: The substring to find (and remove).it can be regex(regular expression) too when -r flag is enabled.
 - **`-v`**: Enable verbose output.
 - **`-d`**: Enable dry-run mode to preview changes.
 - **`-i`**: Enable interactive mode to ask for confirmation before renaming.
-
+- **`-r`**: Enable regex mode to accept regular expression.
 
 ## License 📄
 

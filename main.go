@@ -7,18 +7,20 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
 
 func main() {
 	var path, str string
-	var verbose, dryRun, interactive bool
+	var verbose, dryRun, interactive, regex bool
 	flag.StringVar(&path, "p", "", "path to dir")
 	flag.StringVar(&str, "s", "", "string to find")
 	flag.BoolVar(&verbose, "v", false, "verbose")
 	flag.BoolVar(&dryRun, "d", false, "dry run mode, only print the changes")
 	flag.BoolVar(&interactive, "i", false, "interactive mode, ask for confirmation before renaming")
+	flag.BoolVar(&regex, "r", false, "regex mode, accept regex")
 	flag.Parse()
 
 	if path == "" || str == "" {
@@ -28,7 +30,7 @@ func main() {
 
 	// If interactive mode is enabled, count the files that would be modified.
 	if interactive && !dryRun {
-		candidates, err := countRenameCandidates(path, str)
+		candidates, err := countRenameCandidates(path, str, regex)
 		if err != nil {
 			fmt.Println("Error counting files:", err)
 			os.Exit(2)
@@ -45,7 +47,7 @@ func main() {
 	}
 
 	start := time.Now()
-	n, err := rename(path, str, dryRun)
+	n, err := rename(path, str, dryRun, regex)
 	if err != nil {
 		fmt.Println("Error renaming files:", err)
 		os.Exit(2)
@@ -61,7 +63,7 @@ func main() {
 
 // rename walks the directory and renames files by removing the specified string.
 // If dryRun is true, it only prints what would be done.
-func rename(base, str string, dryRun bool) (int, error) {
+func rename(base, str string, dryRun bool, regex bool) (int, error) {
 	var renamed int
 	err := filepath.WalkDir(base, func(path string, file fs.DirEntry, err error) error {
 		if err != nil {
@@ -71,7 +73,12 @@ func rename(base, str string, dryRun bool) (int, error) {
 			return nil
 		}
 
-		newPath := filepath.Join(filepath.Dir(path), strings.ReplaceAll(file.Name(), str, ""))
+		targetStr, err := FindRegexString(regex, str, file.Name())
+		if err != nil {
+			return err
+		}
+
+		newPath := filepath.Join(filepath.Dir(path), strings.ReplaceAll(file.Name(), targetStr, ""))
 		if path == newPath {
 			return nil
 		}
@@ -91,7 +98,7 @@ func rename(base, str string, dryRun bool) (int, error) {
 }
 
 // countRenameCandidates walks the directory to count files that would be renamed.
-func countRenameCandidates(base, str string) (int, error) {
+func countRenameCandidates(base, str string, regex bool) (int, error) {
 	var count int
 	err := filepath.WalkDir(base, func(path string, file fs.DirEntry, err error) error {
 		if err != nil {
@@ -100,7 +107,13 @@ func countRenameCandidates(base, str string) (int, error) {
 		if file.IsDir() {
 			return nil
 		}
-		newName := strings.ReplaceAll(file.Name(), str, "")
+
+		targetStr, err := FindRegexString(regex, str, file.Name())
+		if err != nil {
+			return nil
+		}
+
+		newName := strings.ReplaceAll(file.Name(), targetStr, "")
 		if file.Name() != newName {
 			count++
 		}
@@ -134,4 +147,21 @@ func YesOrNoPrompt(label string, def bool) bool {
 			return false
 		}
 	}
+}
+
+// Handle compiling regex if -r flag is true
+func FindRegexString(regex bool, str string, fileName string) (string, error) {
+	var targetStr string
+	if regex {
+		r, err := regexp.Compile(str)
+		if err != nil {
+			return "", err
+		}
+
+		targetStr = r.FindString(fileName)
+	} else {
+		targetStr = str
+	}
+
+	return targetStr, nil
 }
