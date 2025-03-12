@@ -16,6 +16,7 @@ type fileOptions struct {
 	path     string
 	str      string
 	fileType string
+	replace  string
 }
 type config struct {
 	options         fileOptions
@@ -41,7 +42,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	pairs, err := walker(cfg.options, pattern)
+	pairs, err := walker(cfg, pattern)
 	if err != nil {
 		fmt.Println("walk dir:", err)
 		os.Exit(2)
@@ -75,11 +76,11 @@ func main() {
 	}
 }
 
-func walker(options fileOptions, pattern *regexp.Regexp,
+func walker(config config, pattern *regexp.Regexp,
 ) (map[string]string, error) {
 	pairs := make(map[string]string)
 	err := filepath.WalkDir(
-		options.path,
+		config.options.path,
 		func(path string, file fs.DirEntry, err error) error {
 			switch {
 			case err != nil:
@@ -89,15 +90,23 @@ func walker(options fileOptions, pattern *regexp.Regexp,
 			}
 			oldName := file.Name()
 			fileExt := searchFileExtention(file.Name())
-			if options.fileType != "" && fileExt != "" {
-				if fileExt != options.fileType {
+			if config.options.fileType != "" && fileExt != "" {
+				if fileExt != config.options.fileType {
 					return nil
 				}
 			}
-			targetStr := searchString(pattern, options.str, oldName)
-			newName := strings.ReplaceAll(oldName, targetStr, "")
+			targetStr := searchString(pattern, config.options.str, oldName)
+			if config.withRegex && targetStr == "" {
+				return nil
+			}
+
+			newName := strings.ReplaceAll(oldName, targetStr, config.options.replace)
 			if newName == oldName || newName == "" {
 				return nil
+			}
+
+			if config.options.replace != "" {
+				newName = resolveConflict(filepath.Dir(path), newName, pairs)
 			}
 			newPath := filepath.Join(filepath.Dir(path), newName)
 			if path == newPath {
@@ -127,6 +136,7 @@ func parseFlags() config {
 	flag.StringVar(&cfg.options.path, "p", "", "path to dir")
 	flag.StringVar(&cfg.options.str, "s", "", "string to find")
 	flag.StringVar(&cfg.options.fileType, "t", "", "filter file type to modify")
+	flag.StringVar(&cfg.options.replace, "replace", "", "replace str instead of remove it")
 	flag.BoolVar(&cfg.withVerbose, "v", false, "verbose")
 	flag.BoolVar(&cfg.withDryRun, "d", false, "dry run")
 	flag.BoolVar(&cfg.withInteractive, "i", false, "interactive")
@@ -158,4 +168,29 @@ func canProceed() bool {
 	default:
 		return false
 	}
+}
+
+func resolveConflict(dir, newName string, pairs map[string]string) string {
+	candidate := newName
+	count := 1
+	for {
+		conflict := false
+		for _, v := range pairs {
+			if filepath.Base(v) == candidate {
+				conflict = true
+				break
+			}
+		}
+		if _, err := os.Stat(filepath.Join(dir, candidate)); err == nil {
+			conflict = true
+		}
+		if !conflict {
+			break
+		}
+		ext := filepath.Ext(newName)
+		nameOnly := strings.TrimSuffix(newName, ext)
+		candidate = fmt.Sprintf("%s_%d%s", nameOnly, count, ext)
+		count++
+	}
+	return candidate
 }
