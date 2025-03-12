@@ -8,7 +8,7 @@ walks down the given directory, and remove the provided string from the names. I
 - **Dry-Run Mode (`-d`)**: Preview changes without modifying any files.
 - **Interactive Mode (`-i`)**: Get a confirmation prompt before applying changes.
 - **Regex Mode (`-r`)**: Accept regex(regular expression) on -s flag.
-- **File type filter (`-r`)**: Filter files based on provided extention(sample: -t .txt).
+- **File type filter (`-t`)**: Filter files based on provided extention(sample: -t .txt).
 - **Verbose Output (`-v`)**: See detailed logs of the operations.
 - **Flexible String Matching**: Remove a given substring from file names.
 - **Easy Integration**: Can be used in scripts or manually via command-line.
