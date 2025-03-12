@@ -31,7 +31,7 @@ func TestCountRenameCandidates(t *testing.T) {
 	createTestFile(t, tempDir, "nochange.txt", "dummy content")
 
 	// Count files that would be renamed.
-	count, err := countRenameCandidates(tempDir, "target", false)
+	count, err := countRenameCandidates(tempDir, "target", "", false)
 	if err != nil {
 		t.Fatalf("Error counting rename candidates: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestRenameDryRun(t *testing.T) {
 	createTestFile(t, tempDir, originalFileName, "dummy content")
 
 	// Run rename in dry-run mode.
-	count, err := rename(tempDir, "target", true, false)
+	count, err := rename(tempDir, "target", "", true, false)
 	if err != nil {
 		t.Fatalf("Error in rename dry-run: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestRenameActual(t *testing.T) {
 	createTestFile(t, tempDir, originalFileName, "dummy content")
 
 	// Run the actual renaming.
-	count, err := rename(tempDir, "target", false, false)
+	count, err := rename(tempDir, "target", "", false, false)
 	if err != nil {
 		t.Fatalf("Error in rename: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestRenameRegexDryRun(t *testing.T) {
 	createTestFile(t, tempDir, originalFileName, "dummy content")
 
 	// Run rename in dry-run mode with regex enabled.
-	count, err := rename(tempDir, "\\d+", true, true)
+	count, err := rename(tempDir, "\\d+", "", true, true)
 	if err != nil {
 		t.Fatalf("Error in rename dry-run: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestRenameRegexActual(t *testing.T) {
 	createTestFile(t, tempDir, originalFileName, "dummy content")
 
 	// Run the renaming in regex mode (actual renaming).
-	count, err := rename(tempDir, "\\d+", false, true)
+	count, err := rename(tempDir, "\\d+", "", false, true)
 	if err != nil {
 		t.Fatalf("Error in rename: %v", err)
 	}
