@@ -3,161 +3,197 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
+	"regexp"
 	"testing"
 )
 
-// createTestFile is a helper function that creates a file with given content in the specified directory.
-func createTestFile(t *testing.T, dir, name, content string) {
+// createTempFile is a helper to create a temporary file with the given content.
+func createTempFile(t *testing.T, dir, name, content string) string {
 	t.Helper()
-	filePath := filepath.Join(dir, name)
-	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-		t.Fatalf("Failed to create test file %s: %v", name, err)
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to create file %s: %v", path, err)
 	}
+	return path
 }
 
-// TestCountRenameCandidates verifies that countRenameCandidates correctly counts the files whose names contain the target substring.
-func TestCountRenameCandidates(t *testing.T) {
-	// Create a temporary directory for testing.
-	tempDir, err := os.MkdirTemp("", "omitter_test")
+// TestWalkerWithoutRegex verifies that walker returns a proper mapping when regex is disabled.
+func TestWalkerWithoutRegex(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "testwalker")
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create sample test files.
-	createTestFile(t, tempDir, "file_target.txt", "dummy content")
-	createTestFile(t, tempDir, "another_target_file.log", "dummy content")
-	createTestFile(t, tempDir, "nochange.txt", "dummy content")
+	// Create files.
+	file1 := createTempFile(t, tempDir, "example_target.txt", "dummy")
+	file2 := createTempFile(t, tempDir, "example.txt", "dummy")
 
-	// Count files that would be renamed.
-	count, err := countRenameCandidates(tempDir, "target", false)
+	// Call walker with regex disabled (pattern is nil) and str "target".
+	pairs, err := walker(tempDir, "target", nil)
 	if err != nil {
-		t.Fatalf("Error counting rename candidates: %v", err)
+		t.Fatalf("walker error: %v", err)
 	}
-
-	expected := 2
-	if count != expected {
-		t.Errorf("Expected %d rename candidates, got %d", expected, count)
+	// file1 should be processed because it contains "target".
+	if _, ok := pairs[file1]; !ok {
+		t.Errorf("expected file %s to be in pairs", file1)
+	}
+	// file2 should not be processed.
+	if _, ok := pairs[file2]; ok {
+		t.Errorf("did not expect file %s in pairs", file2)
 	}
 }
 
-// TestRenameDryRun ensures that when dry-run mode is enabled, files are not actually renamed.
-func TestRenameDryRun(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "omitter_test")
+// TestWalkerWithRegex verifies that walker correctly uses a regex pattern.
+func TestWalkerWithRegex(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "testwalker")
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	originalFileName := "example_target.txt"
-	createTestFile(t, tempDir, originalFileName, "dummy content")
+	// Create files.
+	file1 := createTempFile(t, tempDir, "example_target.txt", "dummy")
+	file2 := createTempFile(t, tempDir, "example.txt", "dummy")
 
-	// Run rename in dry-run mode.
-	count, err := rename(tempDir, "target", true, false)
+	// Compile regex pattern to match "_target" in the file name.
+	pattern, err := regexp.Compile("(_target)")
 	if err != nil {
-		t.Fatalf("Error in rename dry-run: %v", err)
+		t.Fatalf("failed to compile regex: %v", err)
+	}
+
+	// Here the second parameter "target" is still passed,
+	// but the searchString function uses the regex if provided.
+	pairs, err := walker(tempDir, "target", pattern)
+	if err != nil {
+		t.Fatalf("walker error: %v", err)
+	}
+
+	// file1 should be processed because it matches the regex.
+	if _, ok := pairs[file1]; !ok {
+		t.Errorf("expected file %s to be in pairs", file1)
+	}
+	// file2 should not be processed.
+	if _, ok := pairs[file2]; ok {
+		t.Errorf("did not expect file %s in pairs", file2)
+	}
+
+	// Verify that the new file name is as expected.
+	expectedNewName := "example.txt" // "example_target.txt" with "_target" removed.
+	newPath, ok := pairs[file1]
+	if !ok {
+		t.Fatalf("file %s not found in pairs", file1)
+	}
+	if filepath.Base(newPath) != expectedNewName {
+		t.Errorf("expected new file name %q, got %q", expectedNewName, filepath.Base(newPath))
+	}
+}
+
+// TestRename verifies that the rename function renames files as expected.
+func TestRename(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "testrename")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a file that should be renamed.
+	originalFile := createTempFile(t, tempDir, "example_target.txt", "dummy")
+
+	// Expected new name after removing "target".
+	newName := "example_.txt"
+	newPath := filepath.Join(tempDir, newName)
+	pairs := map[string]string{
+		originalFile: newPath,
+	}
+
+	// Call rename.
+	count, err := rename(pairs)
+	if err != nil {
+		t.Fatalf("rename error: %v", err)
 	}
 	if count != 1 {
-		t.Errorf("Expected 1 candidate processed in dry-run, got %d", count)
+		t.Errorf("expected 1 file renamed, got %d", count)
 	}
 
-	// Verify the file still exists with its original name.
-	if _, err := os.Stat(filepath.Join(tempDir, originalFileName)); os.IsNotExist(err) {
-		t.Errorf("Expected file %s to still exist in dry-run mode", originalFileName)
+	// Verify that the original file no longer exists and the new file does.
+	if _, err := os.Stat(originalFile); !os.IsNotExist(err) {
+		t.Errorf("expected original file %s to be removed", originalFile)
 	}
-}
-
-// TestRenameActual checks that files are actually renamed when not in dry-run mode.
-func TestRenameActual(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "omitter_test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	originalFileName := "example_target.txt"
-	createTestFile(t, tempDir, originalFileName, "dummy content")
-
-	// Run the actual renaming.
-	count, err := rename(tempDir, "target", false, false)
-	if err != nil {
-		t.Fatalf("Error in rename: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("Expected 1 file renamed, got %d", count)
-	}
-
-	// Calculate the new file name.
-	newFileName := strings.ReplaceAll(originalFileName, "target", "")
-
-	// Confirm that the original file no longer exists.
-	if _, err := os.Stat(filepath.Join(tempDir, originalFileName)); !os.IsNotExist(err) {
-		t.Errorf("Expected original file %s to be renamed", originalFileName)
-	}
-
-	// Confirm that the new file exists.
-	if _, err := os.Stat(filepath.Join(tempDir, newFileName)); err != nil {
-		t.Errorf("Expected new file %s to exist", newFileName)
+	if _, err := os.Stat(newPath); err != nil {
+		t.Errorf("expected new file %s to exist, error: %v", newPath, err)
 	}
 }
 
-// TestRenameRegexDryRun ensures that when dry-run mode is enabled in regex mode,
-// files are not actually renamed.
-func TestRenameRegexDryRun(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "ommiter_regex_test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+// TestSearchString verifies the behavior of searchString.
+func TestSearchString(t *testing.T) {
+	// When pattern is nil, it should simply return the str parameter.
+	result := searchString(nil, "target", "example_target.txt")
+	if result != "target" {
+		t.Errorf("expected 'target', got '%s'", result)
 	}
-	defer os.RemoveAll(tempDir)
 
-	// Create a test file that should be processed by regex.
-	originalFileName := "sample123.txt" // regex "\\d+" will match "123"
-	createTestFile(t, tempDir, originalFileName, "dummy content")
-
-	// Run rename in dry-run mode with regex enabled.
-	count, err := rename(tempDir, "\\d+", true, true)
+	// With regex pattern provided.
+	pattern, err := regexp.Compile("target")
 	if err != nil {
-		t.Fatalf("Error in rename dry-run: %v", err)
+		t.Fatalf("failed to compile regex: %v", err)
 	}
-	if count != 1 {
-		t.Errorf("Expected 1 candidate processed in dry-run, got %d", count)
+	result = searchString(pattern, "target", "example_target.txt")
+	if result != "target" {
+		t.Errorf("expected 'target', got '%s'", result)
 	}
-	// Verify the file still exists with its original name.
-	if _, err := os.Stat(filepath.Join(tempDir, originalFileName)); os.IsNotExist(err) {
-		t.Errorf("Expected file %s to still exist in dry-run mode", originalFileName)
+
+	// Test with a non-matching pattern.
+	pattern, err = regexp.Compile("nomatch")
+	if err != nil {
+		t.Fatalf("failed to compile regex: %v", err)
+	}
+	result = searchString(pattern, "nomatch", "example_target.txt")
+	if result != "" {
+		t.Errorf("expected empty string, got '%s'", result)
 	}
 }
 
-// TestRenameRegexActual checks that files are actually renamed when regex mode is enabled.
-func TestRenameRegexActual(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "ommiter_regex_test")
+// TestCanProceedYes simulates a "yes" response for canProceed.
+func TestCanProceedYes(t *testing.T) {
+	// Save original os.Stdin.
+	origStdin := os.Stdin
+	defer func() { os.Stdin = origStdin }()
+
+	// Create a pipe and write "y\n".
+	r, w, err := os.Pipe()
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
-
-	originalFileName := "sample123.txt" // regex "\\d+" will match "123"
-	createTestFile(t, tempDir, originalFileName, "dummy content")
-
-	// Run the renaming in regex mode (actual renaming).
-	count, err := rename(tempDir, "\\d+", false, true)
+	_, err = w.WriteString("y\n")
 	if err != nil {
-		t.Fatalf("Error in rename: %v", err)
+		t.Fatal(err)
 	}
-	if count != 1 {
-		t.Errorf("Expected 1 file renamed, got %d", count)
-	}
-	// Calculate the new file name: "sample123.txt" with "123" removed.
-	newFileName := strings.ReplaceAll(originalFileName, "123", "")
+	w.Close()
+	os.Stdin = r
 
-	// Confirm that the original file no longer exists.
-	if _, err := os.Stat(filepath.Join(tempDir, originalFileName)); !os.IsNotExist(err) {
-		t.Errorf("Expected original file %s to be renamed", originalFileName)
+	if !canProceed() {
+		t.Error("expected canProceed() to return true for input 'y'")
 	}
+}
 
-	// Confirm that the new file exists.
-	if _, err := os.Stat(filepath.Join(tempDir, newFileName)); err != nil {
-		t.Errorf("Expected new file %s to exist", newFileName)
+// TestCanProceedNo simulates a "no" response for canProceed.
+func TestCanProceedNo(t *testing.T) {
+	origStdin := os.Stdin
+	defer func() { os.Stdin = origStdin }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = w.WriteString("n\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Close()
+	os.Stdin = r
+
+	if canProceed() {
+		t.Error("expected canProceed() to return false for input 'n'")
 	}
 }
