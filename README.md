@@ -1,13 +1,14 @@
 # 🚀 Omitter
 
 A tool to remove that annoying text from file and folder names. It recursively
-walks down the given directory, and remove the provided string from the names. It supports **dry-run** mode for safe previews, **interactive** confirmation for extra control, and a **verbose** option for detailed logging.
+walks down the given directory, and remove the provided string from the names. It supports **dry-run** mode for safe previews, **interactive** confirmation for extra control, and a **verbose** option for detailed logging and more.
 
 ## Features ✨
 
 - **Dry-Run Mode (`-d`)**: Preview changes without modifying any files.
 - **Interactive Mode (`-i`)**: Get a confirmation prompt before applying changes.
 - **Regex Mode (`-r`)**: Accept regex(regular expression) on -s flag.
+- **File type filter (`-r`)**: Filter files based on provided extention(sample: -t .txt).
 - **Verbose Output (`-v`)**: See detailed logs of the operations.
 - **Flexible String Matching**: Remove a given substring from file names.
 - **Easy Integration**: Can be used in scripts or manually via command-line.
@@ -35,10 +36,16 @@ Run the omitter with the following options:
 ./omitter -p /path/to/directory -s "" [options]
 ```
 
-Sample regex command:
+Example regex command:
 
 ```bash
 ./omitter -p /path/to/directory -s "\\d+" -r [options]
+```
+
+Example filter by extention:
+
+```bash
+./omitter -p /path/to/directory -s "\\d+" -r -t ".txt" [options]
 ```
 
 ### Options
@@ -49,6 +56,7 @@ Sample regex command:
 - **`-d`**: Enable dry-run mode to preview changes.
 - **`-i`**: Enable interactive mode to ask for confirmation before renaming.
 - **`-r`**: Enable regex mode to accept regular expression.
+- **`-t`**: Filter by file type for correction.
 
 ## License 📄
 

@@ -12,9 +12,13 @@ import (
 	"time"
 )
 
+type fileOptions struct {
+	path     string
+	str      string
+	fileType string
+}
 type config struct {
-	path            string
-	str             string
+	options         fileOptions
 	withVerbose     bool
 	withDryRun      bool
 	withInteractive bool
@@ -23,7 +27,7 @@ type config struct {
 
 func main() {
 	cfg := parseFlags()
-	if cfg.path == "" || cfg.str == "" {
+	if cfg.options.path == "" || cfg.options.str == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -31,13 +35,13 @@ func main() {
 	var pattern *regexp.Regexp
 	var err error
 	if cfg.withRegex {
-		pattern, err = regexp.Compile(cfg.str)
+		pattern, err = regexp.Compile(cfg.options.str)
 		if err != nil {
 			fmt.Println("compile pattern:", err)
 			os.Exit(1)
 		}
 	}
-	pairs, err := walker(cfg.path, cfg.str, pattern)
+	pairs, err := walker(cfg.options, pattern)
 	if err != nil {
 		fmt.Println("walk dir:", err)
 		os.Exit(2)
@@ -71,12 +75,11 @@ func main() {
 	}
 }
 
-func walker(
-	base, str string, pattern *regexp.Regexp,
+func walker(options fileOptions, pattern *regexp.Regexp,
 ) (map[string]string, error) {
 	pairs := make(map[string]string)
 	err := filepath.WalkDir(
-		base,
+		options.path,
 		func(path string, file fs.DirEntry, err error) error {
 			switch {
 			case err != nil:
@@ -85,7 +88,13 @@ func walker(
 				return nil
 			}
 			oldName := file.Name()
-			targetStr := searchString(pattern, str, oldName)
+			fileExt := searchFileExtention(file.Name())
+			if options.fileType != "" && fileExt != "" {
+				if fileExt != options.fileType {
+					return nil
+				}
+			}
+			targetStr := searchString(pattern, options.str, oldName)
 			newName := strings.ReplaceAll(oldName, targetStr, "")
 			if newName == oldName || newName == "" {
 				return nil
@@ -115,8 +124,9 @@ func rename(pairs map[string]string) (uint, error) {
 
 func parseFlags() config {
 	var cfg config
-	flag.StringVar(&cfg.path, "p", "", "path to dir")
-	flag.StringVar(&cfg.str, "s", "", "string to find")
+	flag.StringVar(&cfg.options.path, "p", "", "path to dir")
+	flag.StringVar(&cfg.options.str, "s", "", "string to find")
+	flag.StringVar(&cfg.options.fileType, "t", "", "filter file type to modify")
 	flag.BoolVar(&cfg.withVerbose, "v", false, "verbose")
 	flag.BoolVar(&cfg.withDryRun, "d", false, "dry run")
 	flag.BoolVar(&cfg.withInteractive, "i", false, "interactive")
@@ -130,6 +140,10 @@ func searchString(pattern *regexp.Regexp, str, fileName string) string {
 		return str
 	}
 	return pattern.FindString(fileName)
+}
+
+func searchFileExtention(fileName string) string {
+	return filepath.Ext(fileName)
 }
 
 func canProceed() bool {
