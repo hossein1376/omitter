@@ -29,8 +29,11 @@ func TestWalkerWithoutRegex(t *testing.T) {
 	file1 := createTempFile(t, tempDir, "example_target.txt", "dummy")
 	file2 := createTempFile(t, tempDir, "example.txt", "dummy")
 
+	// Create file options
+	options := fileOptions{path: tempDir, str: "target", fileType: ""}
+
 	// Call walker with regex disabled (pattern is nil) and str "target".
-	pairs, err := walker(tempDir, "target", nil)
+	pairs, err := walker(options, nil)
 	if err != nil {
 		t.Fatalf("walker error: %v", err)
 	}
@@ -62,9 +65,12 @@ func TestWalkerWithRegex(t *testing.T) {
 		t.Fatalf("failed to compile regex: %v", err)
 	}
 
+	// Create file options
+	options := fileOptions{path: tempDir, str: "target", fileType: ""}
+
 	// Here the second parameter "target" is still passed,
 	// but the searchString function uses the regex if provided.
-	pairs, err := walker(tempDir, "target", pattern)
+	pairs, err := walker(options, pattern)
 	if err != nil {
 		t.Fatalf("walker error: %v", err)
 	}
@@ -86,6 +92,45 @@ func TestWalkerWithRegex(t *testing.T) {
 	}
 	if filepath.Base(newPath) != expectedNewName {
 		t.Errorf("expected new file name %q, got %q", expectedNewName, filepath.Base(newPath))
+	}
+}
+
+func TestWalkerWitFileType(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "testwalker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create files.
+	file1 := createTempFile(t, tempDir, "file1.txt", "dummy")
+	file2 := createTempFile(t, tempDir, "file1.json", "dummy")
+	file3 := createTempFile(t, tempDir, "file2.json", "dummy")
+	file4 := createTempFile(t, tempDir, "nothing.json", "dummy")
+
+	// Create file options
+	options := fileOptions{path: tempDir, str: "ile", fileType: ".json"}
+
+	// Call walker with regex disabled (pattern is nil) and str "target".
+	pairs, err := walker(options, nil)
+	if err != nil {
+		t.Fatalf("walker error: %v", err)
+	}
+	// file1 should not be processed because it contains ".txt" instead of ".json".
+	if _, ok := pairs[file1]; ok {
+		t.Errorf("did not expect file %s in pairs", file1)
+	}
+	// file2 should be processed.because it contains "ile" in file name and ".json" in file extention
+	if _, ok := pairs[file2]; !ok {
+		t.Errorf("expected file %s to be in pairs", file2)
+	}
+	// file3 should be processed.because it contains "ile" in file name and ".json" in file extention
+	if _, ok := pairs[file3]; !ok {
+		t.Errorf("expected file %s to be in pairs", file3)
+	}
+	// file4 should not be processed.
+	if _, ok := pairs[file4]; ok {
+		t.Errorf("did not expect file %s in pairs", file4)
 	}
 }
 
@@ -195,5 +240,12 @@ func TestCanProceedNo(t *testing.T) {
 
 	if canProceed() {
 		t.Error("expected canProceed() to return false for input 'n'")
+	}
+}
+
+func TestSearchFileExtention(t *testing.T) {
+	result := searchFileExtention("file_name.txt")
+	if result != ".txt" {
+		t.Errorf("expected '.txt', got '%s'", result)
 	}
 }
