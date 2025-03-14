@@ -29,11 +29,17 @@ func TestWalkerWithoutRegex(t *testing.T) {
 	file1 := createTempFile(t, tempDir, "example_target.txt", "dummy")
 	file2 := createTempFile(t, tempDir, "example.txt", "dummy")
 
-	// Create file options
-	options := fileOptions{path: tempDir, str: "target", fileType: ""}
+	// Create config
+	cfg := config{
+		options:         fileOptions{path: tempDir, str: "target", fileType: "", replace: ""},
+		withVerbose:     false,
+		withDryRun:      false,
+		withInteractive: false,
+		withRegex:       false,
+	}
 
 	// Call walker with regex disabled (pattern is nil) and str "target".
-	pairs, err := walker(options, nil)
+	pairs, err := walker(cfg, nil)
 	if err != nil {
 		t.Fatalf("walker error: %v", err)
 	}
@@ -65,12 +71,18 @@ func TestWalkerWithRegex(t *testing.T) {
 		t.Fatalf("failed to compile regex: %v", err)
 	}
 
-	// Create file options
-	options := fileOptions{path: tempDir, str: "target", fileType: ""}
+	// Create config
+	cfg := config{
+		options:         fileOptions{path: tempDir, str: "(_target)", fileType: "", replace: ""},
+		withVerbose:     false,
+		withDryRun:      false,
+		withInteractive: false,
+		withRegex:       true,
+	}
 
 	// Here the second parameter "target" is still passed,
 	// but the searchString function uses the regex if provided.
-	pairs, err := walker(options, pattern)
+	pairs, err := walker(cfg, pattern)
 	if err != nil {
 		t.Fatalf("walker error: %v", err)
 	}
@@ -108,11 +120,17 @@ func TestWalkerWitFileType(t *testing.T) {
 	file3 := createTempFile(t, tempDir, "file2.json", "dummy")
 	file4 := createTempFile(t, tempDir, "nothing.json", "dummy")
 
-	// Create file options
-	options := fileOptions{path: tempDir, str: "ile", fileType: ".json"}
+	// Create config
+	cfg := config{
+		options:         fileOptions{path: tempDir, str: "ile", fileType: ".json", replace: ""},
+		withVerbose:     false,
+		withDryRun:      false,
+		withInteractive: false,
+		withRegex:       false,
+	}
 
 	// Call walker with regex disabled (pattern is nil) and str "target".
-	pairs, err := walker(options, nil)
+	pairs, err := walker(cfg, nil)
 	if err != nil {
 		t.Fatalf("walker error: %v", err)
 	}
@@ -131,6 +149,66 @@ func TestWalkerWitFileType(t *testing.T) {
 	// file4 should not be processed.
 	if _, ok := pairs[file4]; ok {
 		t.Errorf("did not expect file %s in pairs", file4)
+	}
+}
+
+func TestCollisionResolution(t *testing.T) {
+	// Create a temporary directory.
+	tempDir, err := os.MkdirTemp("", "collision_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create two files that will produce the same new name when processed.
+	// Using regex "d.*d" on these file names:
+	// "aaa.json"   -> pattern "aaa" replaced by "bbb" produces "bbb.json"
+	// "aaaaaaa.json" -> pattern "aaaaaaa" replaced by "bbb" also produces "bbb.json"
+	_ = createTempFile(t, tempDir, "aaa.json", "dummy")
+	_ = createTempFile(t, tempDir, "aaaaaaa.json", "dummy")
+
+	// Set up config with regex mode enabled.
+	cfg := config{
+		options: fileOptions{
+			path:    tempDir,
+			str:     "a.*a", // Regex pattern to match the entire part from first d to last d.
+			replace: "bbb",  // Replacement string.
+		},
+		withVerbose:     false,
+		withDryRun:      false,
+		withInteractive: false,
+		withRegex:       true,
+	}
+
+	// Compile the regex pattern.
+	pattern, err := regexp.Compile(cfg.options.str)
+	if err != nil {
+		t.Fatalf("failed to compile regex: %v", err)
+	}
+
+	// Call walker to generate the mapping of old paths to new paths.
+	pairs, err := walker(cfg, pattern)
+	if err != nil {
+		t.Fatalf("walker error: %v", err)
+	}
+
+	// We expect both files to be processed.
+	if len(pairs) != 2 {
+		t.Fatalf("expected 2 files to be processed, got %d", len(pairs))
+	}
+
+	// Collect the new file names.
+	newNames := make(map[string]bool)
+	for _, newPath := range pairs {
+		newNames[filepath.Base(newPath)] = true
+	}
+
+	// We expect one file to become "bbb.json" and the other to become "bbb.json".
+	if !newNames["bbb.json"] {
+		t.Errorf("expected 'bbb.json' in new names, got %v", newNames)
+	}
+	if !newNames["bbb_1.json"] {
+		t.Errorf("expected 'bbb_1.json' in new names, got %v", newNames)
 	}
 }
 

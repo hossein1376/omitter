@@ -9,6 +9,7 @@ walks down the given directory, and remove the provided string from the names. I
 - **Interactive Mode (`-i`)**: Get a confirmation prompt before applying changes.
 - **Regex Mode (`-r`)**: Accept regex(regular expression) on -s flag.
 - **File type filter (`-t`)**: Filter files based on provided extention(sample: -t .txt).
+- **Replace mode (`-replace`)**: Replace instead of removing.
 - **Verbose Output (`-v`)**: See detailed logs of the operations.
 - **Flexible String Matching**: Remove a given substring from file names.
 - **Easy Integration**: Can be used in scripts or manually via command-line.
@@ -48,6 +49,14 @@ Example filter by extention:
 ./omitter -p /path/to/directory -s "\\d+" -r -t ".txt" [options]
 ```
 
+Example replace mode:
+
+🛎In replace mode, if multiple files resolve to the same name, the utility automatically appends a numeric suffix (e.g., \_1, \_2) to ensure each renamed file remains unique and no data is lost.
+
+```bash
+./omitter -p /path/to/directory -s "aaa" --replace bbb [options]
+```
+
 ### Options
 
 - **`-p`**: Path to the directory containing files.
@@ -57,6 +66,7 @@ Example filter by extention:
 - **`-i`**: Enable interactive mode to ask for confirmation before renaming.
 - **`-r`**: Enable regex mode to accept regular expression.
 - **`-t`**: Filter by file type for correction.
+- **`-replace`**: Replace instead of removing.
 
 ## License 📄
 
