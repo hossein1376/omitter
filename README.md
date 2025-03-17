@@ -10,6 +10,7 @@ walks down the given directory, and remove the provided string from the names. I
 - **Regex Mode (`-r`)**: Accept regex(regular expression) on -s flag.
 - **File type filter (`-t`)**: Filter files based on provided extention(sample: -t .txt).
 - **Replace mode (`-replace`)**: Replace instead of removing.
+- **Different output (`-output`)**: Copy to desired output dir.
 - **Verbose Output (`-v`)**: See detailed logs of the operations.
 - **Flexible String Matching**: Remove a given substring from file names.
 - **Easy Integration**: Can be used in scripts or manually via command-line.
@@ -57,6 +58,12 @@ Example replace mode:
 ./omitter -p /path/to/directory -s "aaa" --replace bbb [options]
 ```
 
+Example output flag:
+
+```bash
+./omitter -p /path/to/directory -s "aaa" --replace bbb --output /path/to/target/output [options]
+```
+
 ### Options
 
 - **`-p`**: Path to the directory containing files.
@@ -67,6 +74,8 @@ Example replace mode:
 - **`-r`**: Enable regex mode to accept regular expression.
 - **`-t`**: Filter by file type for correction.
 - **`-replace`**: Replace instead of removing.
+- **`-output`**: Copy to new dir instead of rename in path flag dir.
+- **`-help`**: Print usage of omitter.
 
 ## License 📄
 
