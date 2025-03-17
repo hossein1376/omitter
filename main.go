@@ -31,11 +31,12 @@ type config struct {
 	withDryRun      bool
 	withInteractive bool
 	withRegex       bool
+	help            bool
 }
 
 func main() {
 	cfg := parseFlags()
-	if cfg.options.path == "" || cfg.options.str == "" {
+	if cfg.options.path == "" || cfg.options.str == "" || cfg.help {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -214,6 +215,7 @@ func parseFlags() config {
 	flag.BoolVar(&cfg.withDryRun, "d", false, "dry run")
 	flag.BoolVar(&cfg.withInteractive, "i", false, "interactive")
 	flag.BoolVar(&cfg.withRegex, "r", false, "enable regex")
+	flag.BoolVar(&cfg.help, "help", false, "help")
 	flag.Parse()
 	return cfg
 }
