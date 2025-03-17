@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -12,11 +13,17 @@ import (
 	"time"
 )
 
+const (
+	RENAME string = "rename"
+	COPY   string = "copy"
+)
+
 type fileOptions struct {
 	path     string
 	str      string
 	fileType string
 	replace  string
+	output   string
 }
 type config struct {
 	options         fileOptions
@@ -24,11 +31,12 @@ type config struct {
 	withDryRun      bool
 	withInteractive bool
 	withRegex       bool
+	help            bool
 }
 
 func main() {
 	cfg := parseFlags()
-	if cfg.options.path == "" || cfg.options.str == "" {
+	if cfg.options.path == "" || cfg.options.str == "" || cfg.help {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -47,8 +55,11 @@ func main() {
 		fmt.Println("walk dir:", err)
 		os.Exit(2)
 	}
+
+	actionName := getActionName(cfg.options.output)
+
 	if cfg.withDryRun {
-		fmt.Printf("Found %d file(s) to rename!\n", len(pairs))
+		fmt.Printf("Found %d file(s) to %s!\n", len(pairs), actionName)
 		if cfg.withVerbose {
 			for k, v := range pairs {
 				fmt.Printf("%s -> %s\n", k, v)
@@ -57,7 +68,7 @@ func main() {
 		return
 	}
 	if cfg.withInteractive {
-		fmt.Printf("Found %d file(s). Proceed?(y/n) ", len(pairs))
+		fmt.Printf("Found %d file(s) to %s. Proceed?(y/n) ", len(pairs), actionName)
 		if !canProceed() {
 			fmt.Println("Aborted.")
 			return
@@ -65,14 +76,27 @@ func main() {
 	}
 
 	start := time.Now()
-	n, err := rename(pairs)
-	if err != nil {
-		fmt.Println("Renaming:", err)
-		fmt.Printf("%d file(s) were renamed.\n", n)
-		os.Exit(2)
-	}
-	if cfg.withVerbose {
-		fmt.Printf("Renamed %d file(s) in %s.\n", n, time.Since(start))
+	var n uint
+	if cfg.options.output != "" {
+		n, err = copyAction(pairs)
+		if err != nil {
+			fmt.Println("Copying:", err)
+			fmt.Printf("%d file(s) were copied.\n", n)
+			os.Exit(2)
+		}
+		if cfg.withVerbose {
+			fmt.Printf("Copied %d file(s) in %s.\n", n, time.Since(start))
+		}
+	} else {
+		n, err = renameAction(pairs)
+		if err != nil {
+			fmt.Println("Renaming:", err)
+			fmt.Printf("%d file(s) were renamed.\n", n)
+			os.Exit(2)
+		}
+		if cfg.withVerbose {
+			fmt.Printf("Renamed %d file(s) in %s.\n", n, time.Since(start))
+		}
 	}
 }
 
@@ -105,10 +129,16 @@ func walker(config config, pattern *regexp.Regexp,
 				return nil
 			}
 
-			if config.options.replace != "" {
-				newName = resolveConflict(filepath.Dir(path), newName, pairs)
+			var targetDir string
+			if config.options.output != "" {
+				targetDir = config.options.output
+			} else {
+				targetDir = path
 			}
-			newPath := filepath.Join(filepath.Dir(path), newName)
+			if config.options.replace != "" {
+				newName = resolveConflict(filepath.Dir(targetDir), newName, pairs)
+			}
+			newPath := filepath.Join(filepath.Dir(targetDir), newName)
 			if path == newPath {
 				return nil
 			}
@@ -118,7 +148,50 @@ func walker(config config, pattern *regexp.Regexp,
 	return pairs, err
 }
 
-func rename(pairs map[string]string) (uint, error) {
+func copyAction(pairs map[string]string) (uint, error) {
+	var copied uint
+	for oldName, newName := range pairs {
+		if err := copyFile(oldName, newName); err != nil {
+			return copied, fmt.Errorf("%q to %q: %w", oldName, newName, err)
+		}
+		copied++
+	}
+	return copied, nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source(%q) file: %w", src, err)
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("failed to create destination(%q) file: %w", dst, err)
+	}
+	defer out.Close()
+
+	if _, err = io.Copy(out, in); err != nil {
+		return fmt.Errorf("error copying data: %w", err)
+	}
+
+	if err = out.Sync(); err != nil {
+		return fmt.Errorf("failed to sync destination file: %w", err)
+	}
+
+	info, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("failed to get file(%q) info: %w", src, err)
+	}
+	if err = os.Chmod(dst, info.Mode()); err != nil {
+		return fmt.Errorf("failed to set file(%q) permissions: %w", dst, err)
+	}
+
+	return nil
+}
+
+func renameAction(pairs map[string]string) (uint, error) {
 	var renamed uint
 	for oldName, newName := range pairs {
 		if err := os.Rename(oldName, newName); err != nil {
@@ -137,10 +210,12 @@ func parseFlags() config {
 	flag.StringVar(&cfg.options.str, "s", "", "string to find")
 	flag.StringVar(&cfg.options.fileType, "t", "", "filter file type to modify")
 	flag.StringVar(&cfg.options.replace, "replace", "", "replace str instead of remove it")
+	flag.StringVar(&cfg.options.output, "output", "", "copy to new dir instead of rename in path flag dir")
 	flag.BoolVar(&cfg.withVerbose, "v", false, "verbose")
 	flag.BoolVar(&cfg.withDryRun, "d", false, "dry run")
 	flag.BoolVar(&cfg.withInteractive, "i", false, "interactive")
 	flag.BoolVar(&cfg.withRegex, "r", false, "enable regex")
+	flag.BoolVar(&cfg.help, "help", false, "help")
 	flag.Parse()
 	return cfg
 }
@@ -193,4 +268,14 @@ func resolveConflict(dir, newName string, pairs map[string]string) string {
 		count++
 	}
 	return candidate
+}
+
+func getActionName(output string) string {
+	var name string
+	if output != "" {
+		name = COPY
+	} else {
+		name = RENAME
+	}
+	return name
 }
