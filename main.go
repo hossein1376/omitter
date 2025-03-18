@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/pooulad/ravan"
 )
 
 const (
@@ -150,11 +152,16 @@ func walker(config config, pattern *regexp.Regexp,
 
 func copyAction(pairs map[string]string) (uint, error) {
 	var copied uint
+	total := len(pairs)
+	i := 0
+	r := ravan.New(50)
 	for oldName, newName := range pairs {
 		if err := copyFile(oldName, newName); err != nil {
 			return copied, fmt.Errorf("%q to %q: %w", oldName, newName, err)
 		}
 		copied++
+		i++
+		r.Draw(float64(i) / float64(total))
 	}
 	return copied, nil
 }
@@ -193,6 +200,9 @@ func copyFile(src, dst string) error {
 
 func renameAction(pairs map[string]string) (uint, error) {
 	var renamed uint
+	total := len(pairs)
+	i := 0
+	r := ravan.New(50)
 	for oldName, newName := range pairs {
 		if err := os.Rename(oldName, newName); err != nil {
 			return renamed, fmt.Errorf(
@@ -200,6 +210,8 @@ func renameAction(pairs map[string]string) (uint, error) {
 			)
 		}
 		renamed++
+		i++
+		r.Draw(float64(i) / float64(total))
 	}
 	return renamed, nil
 }
