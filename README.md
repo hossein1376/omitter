@@ -12,6 +12,7 @@ walks down the given directory, and remove the provided string from the names. I
 - **Replace mode (`-replace`)**: Replace instead of removing.
 - **Different output (`-output`)**: Copy to desired output dir.
 - **Verbose Output (`-v`)**: See detailed logs of the operations.
+- **Verbose Output (`-tt`)**: Set transmission type when output is exist. default set to copy.
 - **Flexible String Matching**: Remove a given substring from file names.
 - **Easy Integration**: Can be used in scripts or manually via command-line.
 
@@ -58,10 +59,28 @@ Example replace mode:
 ./omitter -p /path/to/directory -s "aaa" --replace bbb [options]
 ```
 
-Example output flag:
+Example output flag(copy):
 
 ```bash
-./omitter -p /path/to/directory -s "aaa" --replace bbb --output /path/to/target/output [options]
+./omitter -p /path/to/directory -s "aaa" --output /path/to/target/output [options]
+
+or
+
+./omitter -p /path/to/directory -s "aaa" --output /path/to/target/output -tt cp [options]
+
+or
+
+./omitter -p /path/to/directory -s "aaa" --output /path/to/target/output -tt copy [options]
+```
+
+Example output flag(move):
+
+```bash
+./omitter -p /path/to/directory -s "aaa" --output /path/to/target/output -tt mv [options]
+
+or
+
+./omitter -p /path/to/directory -s "aaa" --output /path/to/target/output -tt move [options]
 ```
 
 ### Options
@@ -73,6 +92,7 @@ Example output flag:
 - **`-i`**: Enable interactive mode to ask for confirmation before renaming.
 - **`-r`**: Enable regex mode to accept regular expression.
 - **`-t`**: Filter by file type for correction.
+- **`-tt`**: Set transmission type(copy/move). default is copy
 - **`-replace`**: Replace instead of removing.
 - **`-output`**: Copy to new dir instead of rename in path flag dir.
 - **`-help`**: Print usage of omitter.

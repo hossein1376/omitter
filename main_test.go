@@ -288,6 +288,48 @@ func TestCopyAction(t *testing.T) {
 	}
 }
 
+// TestCopyAction verifies that the rename function renames files as expected.
+func TestMoveAction(t *testing.T) {
+	srcDir, err := os.MkdirTemp("", "first_dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(srcDir)
+
+	dstDir, err := os.MkdirTemp("", "second_dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dstDir)
+
+	// Create a file that should be copy.
+	originalFile := createTempFile(t, srcDir, "example_target.txt", "dummy")
+
+	// Expected new name after removing "target".
+	newName := "example_.txt"
+	newPath := filepath.Join(dstDir, newName)
+	pairs := map[string]string{
+		originalFile: newPath,
+	}
+
+	// Call moveAction.
+	count, err := moveAction(pairs)
+	if err != nil {
+		t.Fatalf("move error: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 file moved, got %d", count)
+	}
+
+	if _, err := os.Stat(newPath); err != nil {
+		t.Errorf("expected new file %s to exist, error: %v", newPath, err)
+	}
+
+	if _, err := os.Stat(originalFile); err == nil {
+		t.Errorf("expected old file %s to not exist, error: %v", originalFile, err)
+	}
+}
+
 // TestSearchString verifies the behavior of searchString.
 func TestSearchString(t *testing.T) {
 	// When pattern is nil, it should simply return the str parameter.
@@ -372,16 +414,19 @@ func TestSearchFileExtention(t *testing.T) {
 
 // TestGetActionName verifies returning action name(rename or copy).
 func TestGetActionName(t *testing.T) {
-	copy := getActionName("output_is_not_empty")
-	expected1 := "copy"
-	if copy != expected1 {
-		t.Errorf("expected %q, got %q", expected1, copy)
+	actionName1 := getActionName("output_is_not_empty", "copy")
+	if actionName1 != COPY {
+		t.Errorf("expected %q, got %q", COPY, actionName1)
 	}
 
-	rename := getActionName("")
-	expected2 := "rename"
-	if rename != expected2 {
-		t.Errorf("expected %q, got %q", expected2, rename)
+	actionName2 := getActionName("output_is_not_empty", "mv")
+	if actionName2 != MOVE {
+		t.Errorf("expected %q, got %q", MOVE, actionName2)
+	}
+
+	actionName3 := getActionName("", "")
+	if actionName3 != RENAME {
+		t.Errorf("expected %q, got %q", RENAME, actionName3)
 	}
 }
 
@@ -423,5 +468,21 @@ func TestCopyFile(t *testing.T) {
 
 	if string(b) != fileContent {
 		t.Errorf("expected %s. got %s", fileContent, string(b))
+	}
+}
+
+func TestTransmissionType(t *testing.T) {
+	tt_copy := getTransmissionType("copy")
+	tt_move := getTransmissionType("move")
+	tt_default := getTransmissionType("")
+
+	if tt_copy != COPY {
+		t.Errorf("expected %s. got %s", COPY, tt_copy)
+	}
+	if tt_move != MOVE {
+		t.Errorf("expected %s. got %s", MOVE, tt_move)
+	}
+	if tt_default != COPY {
+		t.Errorf("expected %s. got %s", COPY, tt_default)
 	}
 }
