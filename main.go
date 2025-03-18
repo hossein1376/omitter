@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -18,14 +19,16 @@ import (
 const (
 	RENAME string = "rename"
 	COPY   string = "copy"
+	MOVE   string = "move"
 )
 
 type fileOptions struct {
-	path     string
-	str      string
-	fileType string
-	replace  string
-	output   string
+	path             string
+	str              string
+	fileType         string
+	replace          string
+	output           string
+	transmissionType string
 }
 type config struct {
 	options         fileOptions
@@ -58,7 +61,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	actionName := getActionName(cfg.options.output)
+	actionName := getActionName(cfg.options.output, cfg.options.transmissionType)
 
 	if cfg.withDryRun {
 		fmt.Printf("Found %d file(s) to %s!\n", len(pairs), actionName)
@@ -80,14 +83,27 @@ func main() {
 	start := time.Now()
 	var n uint
 	if cfg.options.output != "" {
-		n, err = copyAction(pairs)
+		tt := getTransmissionType(cfg.options.transmissionType)
+		var n uint
+		var err error
+		var message, vMessage string
+		if tt == COPY {
+			n, err = copyAction(pairs)
+			message = fmt.Sprintf("%d file(s) were copied.", n)
+			vMessage = fmt.Sprintf("Copied %d file(s)", n)
+
+		} else {
+			n, err = moveAction(pairs)
+			message = fmt.Sprintf("%d file(s) were moved.", n)
+			vMessage = fmt.Sprintf("Moved %d file(s)", n)
+		}
 		if err != nil {
-			fmt.Println("Copying:", err)
-			fmt.Printf("%d file(s) were copied.\n", n)
+			fmt.Printf("%s: %t", tt, err)
+			fmt.Println(message)
 			os.Exit(2)
 		}
 		if cfg.withVerbose {
-			fmt.Printf("Copied %d file(s) in %s.\n", n, time.Since(start))
+			fmt.Printf("%s in %s.\n", vMessage, time.Since(start))
 		}
 	} else {
 		n, err = renameAction(pairs)
@@ -169,6 +185,25 @@ func copyAction(pairs map[string]string) (uint, error) {
 	return copied, nil
 }
 
+func moveAction(pairs map[string]string) (uint, error) {
+	var copied uint
+	total := len(pairs)
+	i := 0
+	r, err := ravan.New(ravan.WithWidth(50))
+	if err != nil {
+		log.Fatal(err)
+	}
+	for oldName, newName := range pairs {
+		if err := moveFile(oldName, newName); err != nil {
+			return copied, fmt.Errorf("%q to %q: %w", oldName, newName, err)
+		}
+		copied++
+		i++
+		r.Draw(float64(i) / float64(total))
+	}
+	return copied, nil
+}
+
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
@@ -196,6 +231,43 @@ func copyFile(src, dst string) error {
 	}
 	if err = os.Chmod(dst, info.Mode()); err != nil {
 		return fmt.Errorf("failed to set file(%q) permissions: %w", dst, err)
+	}
+
+	return nil
+}
+
+func moveFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source(%q) file: %w", src, err)
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("failed to create destination(%q) file: %w", dst, err)
+	}
+	defer out.Close()
+
+	if _, err = io.Copy(out, in); err != nil {
+		return fmt.Errorf("error moving data: %w", err)
+	}
+
+	if err = out.Sync(); err != nil {
+		return fmt.Errorf("failed to sync destination file: %w", err)
+	}
+
+	info, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("failed to get file(%q) info: %w", src, err)
+	}
+
+	if err = os.Chmod(dst, info.Mode()); err != nil {
+		return fmt.Errorf("failed to set file(%q) permissions: %w", dst, err)
+	}
+
+	if err = os.Remove(src); err != nil {
+		return fmt.Errorf("failed to remove source file after copying: %w", err)
 	}
 
 	return nil
@@ -229,6 +301,7 @@ func parseFlags() config {
 	flag.StringVar(&cfg.options.fileType, "t", "", "filter file type to modify")
 	flag.StringVar(&cfg.options.replace, "replace", "", "replace str instead of remove it")
 	flag.StringVar(&cfg.options.output, "output", "", "copy to new dir instead of rename in path flag dir")
+	flag.StringVar(&cfg.options.transmissionType, "tt", "", "determine transmission type. default is copy if output flag is exist.")
 	flag.BoolVar(&cfg.withVerbose, "v", false, "verbose")
 	flag.BoolVar(&cfg.withDryRun, "d", false, "dry run")
 	flag.BoolVar(&cfg.withInteractive, "i", false, "interactive")
@@ -288,12 +361,31 @@ func resolveConflict(dir, newName string, pairs map[string]string) string {
 	return candidate
 }
 
-func getActionName(output string) string {
+func getActionName(output, tType string) string {
+	tt := getTransmissionType(tType)
 	var name string
 	if output != "" {
-		name = COPY
+		name = tt
 	} else {
 		name = RENAME
 	}
 	return name
+}
+
+func getTransmissionType(transmissionType string) string {
+	var tt string
+	switch transmissionType {
+	case "":
+		tt = COPY
+	case "cp":
+		tt = COPY
+	case "copy":
+		tt = COPY
+	case "mv":
+		tt = MOVE
+	case "move":
+		tt = MOVE
+	}
+
+	return tt
 }
