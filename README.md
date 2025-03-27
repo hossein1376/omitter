@@ -8,7 +8,7 @@ walks down the given directory, and remove the provided string from the names. I
 - **Dry-Run Mode (`-d`)**: Preview changes without modifying any files.
 - **Interactive Mode (`-i`)**: Get a confirmation prompt before applying changes.
 - **Regex Mode (`-r`)**: Accept regex(regular expression) on -s flag.
-- **File type filter (`-t`)**: Filter files based on provided extention(sample: -t .txt).
+- **File type filter (`-t`)**: Filter files based on provided extension(sample: -t .txt).
 - **Replace mode (`-replace`)**: Replace instead of removing.
 - **Different output (`-output`)**: Copy to desired output dir.
 - **Verbose Output (`-v`)**: See detailed logs of the operations.
@@ -45,7 +45,7 @@ Example regex command:
 ./omitter -p /path/to/directory -s "\\d+" -r [options]
 ```
 
-Example filter by extention:
+Example filter by extension:
 
 ```bash
 ./omitter -p /path/to/directory -s "\\d+" -r -t ".txt" [options]
@@ -92,7 +92,7 @@ or
 - **`-i`**: Enable interactive mode to ask for confirmation before renaming.
 - **`-r`**: Enable regex mode to accept regular expression.
 - **`-t`**: Filter by file type for correction.
-- **`-tt`**: Set transmission type(copy/move). default is copy
+- **`-tt`**: Set transmission type(copy/move). default is copy.
 - **`-replace`**: Replace instead of removing.
 - **`-output`**: Copy to new dir instead of rename in path flag dir.
 - **`-help`**: Print usage of omitter.

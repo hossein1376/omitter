@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -131,7 +130,7 @@ func walker(config config, pattern *regexp.Regexp,
 				return nil
 			}
 			oldName := file.Name()
-			fileExt := searchFileExtention(file.Name())
+			fileExt := filepath.Ext(oldName)
 			if config.options.fileType != "" && fileExt != "" {
 				if fileExt != config.options.fileType {
 					return nil
@@ -167,62 +166,60 @@ func walker(config config, pattern *regexp.Regexp,
 }
 
 func copyAction(pairs map[string]string) (uint, error) {
-	var copied uint
-	total := len(pairs)
-	i := 0
 	r, err := ravan.New(ravan.WithWidth(50))
 	if err != nil {
-		log.Fatal(err)
+		return 0, fmt.Errorf("init raven: %w", err)
 	}
+
+	var copied uint
+	total := len(pairs)
 	for oldName, newName := range pairs {
 		if err := copyFile(oldName, newName); err != nil {
 			return copied, fmt.Errorf("%q to %q: %w", oldName, newName, err)
 		}
 		copied++
-		i++
-		r.Draw(float64(i) / float64(total))
+		r.Draw(float64(copied) / float64(total))
 	}
 	return copied, nil
 }
 
 func moveAction(pairs map[string]string) (uint, error) {
-	var copied uint
-	total := len(pairs)
-	i := 0
 	r, err := ravan.New(ravan.WithWidth(50))
 	if err != nil {
-		log.Fatal(err)
+		return 0, fmt.Errorf("init raven: %w", err)
 	}
+
+	var moved uint
+	total := len(pairs)
 	for oldName, newName := range pairs {
 		if err := moveFile(oldName, newName); err != nil {
-			return copied, fmt.Errorf("%q to %q: %w", oldName, newName, err)
+			return moved, fmt.Errorf("%q to %q: %w", oldName, newName, err)
 		}
-		copied++
-		i++
-		r.Draw(float64(i) / float64(total))
+		moved++
+		r.Draw(float64(moved) / float64(total))
 	}
-	return copied, nil
+	return moved, nil
 }
 
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("failed to open source(%q) file: %w", src, err)
+		return fmt.Errorf("open source file: %w", err)
 	}
 	defer in.Close()
 
 	out, err := os.Create(dst)
 	if err != nil {
-		return fmt.Errorf("failed to create destination(%q) file: %w", dst, err)
+		return fmt.Errorf("create destination file: %w", err)
 	}
 	defer out.Close()
 
 	if _, err = io.Copy(out, in); err != nil {
-		return fmt.Errorf("error copying data: %w", err)
+		return fmt.Errorf("copying data: %w", err)
 	}
 
 	if err = out.Sync(); err != nil {
-		return fmt.Errorf("failed to sync destination file: %w", err)
+		return fmt.Errorf("sync destination file: %w", err)
 	}
 
 	info, err := os.Stat(src)
@@ -239,48 +236,44 @@ func copyFile(src, dst string) error {
 func moveFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("failed to open source(%q) file: %w", src, err)
+		return fmt.Errorf("open source file: %w", err)
 	}
 	defer in.Close()
 
 	out, err := os.Create(dst)
 	if err != nil {
-		return fmt.Errorf("failed to create destination(%q) file: %w", dst, err)
+		return fmt.Errorf("create destination file: %w", err)
 	}
 	defer out.Close()
 
 	if _, err = io.Copy(out, in); err != nil {
-		return fmt.Errorf("error moving data: %w", err)
+		return fmt.Errorf("moving data: %w", err)
 	}
-
 	if err = out.Sync(); err != nil {
-		return fmt.Errorf("failed to sync destination file: %w", err)
+		return fmt.Errorf("sync destination file: %w", err)
 	}
-
 	info, err := os.Stat(src)
 	if err != nil {
-		return fmt.Errorf("failed to get file(%q) info: %w", src, err)
+		return fmt.Errorf("get file(%q) info: %w", src, err)
 	}
-
 	if err = os.Chmod(dst, info.Mode()); err != nil {
-		return fmt.Errorf("failed to set file(%q) permissions: %w", dst, err)
+		return fmt.Errorf("set file(%q) permissions: %w", dst, err)
 	}
-
 	if err = os.Remove(src); err != nil {
-		return fmt.Errorf("failed to remove source file after copying: %w", err)
+		return fmt.Errorf("remove source file after copy: %w", err)
 	}
 
 	return nil
 }
 
 func renameAction(pairs map[string]string) (uint, error) {
-	var renamed uint
-	total := len(pairs)
-	i := 0
 	r, err := ravan.New(ravan.WithWidth(50))
 	if err != nil {
-		log.Fatal(err)
+		return 0, fmt.Errorf("init raven: %w", err)
 	}
+
+	var renamed uint
+	total := len(pairs)
 	for oldName, newName := range pairs {
 		if err := os.Rename(oldName, newName); err != nil {
 			return renamed, fmt.Errorf(
@@ -288,9 +281,9 @@ func renameAction(pairs map[string]string) (uint, error) {
 			)
 		}
 		renamed++
-		i++
-		r.Draw(float64(i) / float64(total))
+		r.Draw(float64(renamed) / float64(total))
 	}
+
 	return renamed, nil
 }
 
@@ -316,10 +309,6 @@ func searchString(pattern *regexp.Regexp, str, fileName string) string {
 		return str
 	}
 	return pattern.FindString(fileName)
-}
-
-func searchFileExtention(fileName string) string {
-	return filepath.Ext(fileName)
 }
 
 func canProceed() bool {
@@ -363,29 +352,18 @@ func resolveConflict(dir, newName string, pairs map[string]string) string {
 
 func getActionName(output, tType string) string {
 	tt := getTransmissionType(tType)
-	var name string
+	name := RENAME
 	if output != "" {
 		name = tt
-	} else {
-		name = RENAME
 	}
 	return name
 }
 
 func getTransmissionType(transmissionType string) string {
-	var tt string
 	switch transmissionType {
-	case "":
-		tt = COPY
-	case "cp":
-		tt = COPY
-	case "copy":
-		tt = COPY
-	case "mv":
-		tt = MOVE
-	case "move":
-		tt = MOVE
+	case "mv", "move":
+		return MOVE
+	default:
+		return COPY
 	}
-
-	return tt
 }
