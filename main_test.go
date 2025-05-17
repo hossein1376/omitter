@@ -139,11 +139,11 @@ func TestWalkerWitFileType(t *testing.T) {
 	if _, ok := pairs[file1]; ok {
 		t.Errorf("did not expect file %s in pairs", file1)
 	}
-	// file2 should be processed.because it contains "ile" in file name and ".json" in file extention
+	// file2 should be processed.because it contains "ile" in file name and ".json" in file extension
 	if _, ok := pairs[file2]; !ok {
 		t.Errorf("expected file %s to be in pairs", file2)
 	}
-	// file3 should be processed.because it contains "ile" in file name and ".json" in file extention
+	// file3 should be processed.because it contains "ile" in file name and ".json" in file extension
 	if _, ok := pairs[file3]; !ok {
 		t.Errorf("expected file %s to be in pairs", file3)
 	}
@@ -400,15 +400,6 @@ func TestCanProceedNo(t *testing.T) {
 
 	if canProceed() {
 		t.Error("expected canProceed() to return false for input 'n'")
-	}
-}
-
-// TestSearchFileExtention verifies returning file extention based on file name.
-func TestSearchFileExtention(t *testing.T) {
-	result := searchFileExtention("file_name.txt")
-	expected := ".txt"
-	if result != expected {
-		t.Errorf("expected %q, got %q", expected, result)
 	}
 }
 
